@@ -3,12 +3,18 @@
 RSpec.describe GlReport::FilteredRelation do
   let(:test_model) do
     Class.new do
-      def self.all
-        []
-      end
+      class << self
+        def all
+          self
+        end
 
-      def self.where(*)
-        all
+        def where(*)
+          self
+        end
+
+        def to_a
+          []
+        end
       end
     end
   end

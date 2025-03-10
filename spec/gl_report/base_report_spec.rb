@@ -3,20 +3,26 @@
 RSpec.describe GlReport::BaseReport do
   let(:test_model) do
     Class.new do
-      def self.all
-        []
-      end
+      class << self
+        def all
+          self
+        end
 
-      def self.table_name
-        'test_models'
-      end
+        def table_name
+          'test_models'
+        end
 
-      def self.left_outer_joins(*)
-        all
-      end
+        def left_outer_joins(*)
+          self
+        end
 
-      def self.select(*)
-        all
+        def select(*)
+          self
+        end
+
+        def to_a
+          []
+        end
       end
     end
   end

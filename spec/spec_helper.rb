@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "bundler/setup"
-require "gl_report"
+require 'bundler/setup'
+require 'gl_report'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'active_support/core_ext/object/blank'
+
 module GlReport
   class FilterStrategy
     def initialize(column_definition)
@@ -16,7 +18,7 @@ module GlReport
 
       sql_fragment = @column_definition[:select].values.first
       sql_operator = convert_operator_to_sql(operator)
-      
+
       relation.where("#{sql_fragment} #{sql_operator} ?", normalize_value(value))
     end
 
@@ -38,12 +40,12 @@ module GlReport
 
     def convert_operator_to_sql(operator)
       case operator.to_sym
-      when :eq   then "="
-      when :gt   then ">"
-      when :gte  then ">="
-      when :lt   then "<"
-      when :lte  then "<="
-      when :like then "LIKE"
+      when :eq   then '='
+      when :gt   then '>'
+      when :gte  then '>='
+      when :lt   then '<'
+      when :lte  then '<='
+      when :like then 'LIKE'
       else
         raise Error, "Unsupported filter operator: #{operator}"
       end
@@ -51,6 +53,7 @@ module GlReport
 
     def normalize_value(value)
       return "%#{value}%" if @current_operator == :like
+
       value
     end
   end

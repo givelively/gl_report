@@ -3,6 +3,7 @@ PATH
   specs:
     gl_report (0.1.0)
       activerecord (>= 6.0)
+      activesupport (>= 6.0)
 
 GEM
   remote: https://rubygems.org/
