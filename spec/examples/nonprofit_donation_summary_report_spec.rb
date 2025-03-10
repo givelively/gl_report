@@ -1,6 +1,18 @@
-# frozen_string_literal: true
-
 RSpec.describe "Example: NonprofitDonationSummaryReport" do
+  # Model definitions for testing
+  class Nonprofit < ActiveRecord::Base
+    has_many :donations, foreign_key: 'nonprofit_id'
+  end
+
+  class Donation < ActiveRecord::Base
+    belongs_to :nonprofit
+    has_one :refund, foreign_key: 'donation_id'
+  end
+
+  class Refund < ActiveRecord::Base
+    belongs_to :donation
+  end
+
   before(:all) do
     ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")
     
@@ -12,7 +24,7 @@ RSpec.describe "Example: NonprofitDonationSummaryReport" do
 
       create_table :donations do |t|
         t.references :nonprofit
-        t.decimal :amount, precision: 10, scale: 2
+        t.integer :amount_cents, null: false
         t.string :currency, default: "USD"
         t.string :status
         t.datetime :processed_at
@@ -21,39 +33,31 @@ RSpec.describe "Example: NonprofitDonationSummaryReport" do
 
       create_table :refunds do |t|
         t.references :donation
-        t.decimal :amount, precision: 10, scale: 2
+        t.integer :amount_cents, null: false
         t.string :status
         t.timestamps
       end
     end
-
-    class Nonprofit < ActiveRecord::Base
-      has_many :donations
-    end
-
-    class Donation < ActiveRecord::Base
-      belongs_to :nonprofit
-      has_one :refund
-    end
-
-    class Refund < ActiveRecord::Base
-      belongs_to :donation
-    end
   end
 
-  # ... cleanup code remains the same ...
+  after(:all) do
+    ActiveRecord::Base.connection.drop_table(:refunds)
+    ActiveRecord::Base.connection.drop_table(:donations)
+    ActiveRecord::Base.connection.drop_table(:nonprofits)
+    Object.send(:remove_const, :Refund)
+    Object.send(:remove_const, :Donation)
+    Object.send(:remove_const, :Nonprofit)
+  end
 
   let(:report_class) do
     Class.new(GlReport::BaseReport) do
-      model Nonprofit
+      model Nonprofit  # Using our test model here
 
-      # Basic nonprofit information
       column :nonprofit_name,
         name: "Nonprofit Name",
         select: { name: "nonprofits.name" },
         value: ->(record, _) { record[:name] }
 
-      # Filter columns (virtual)
       column :donation_processed_at,
         name: "Donation Date",
         select: { processed_at: "donations.processed_at" },
@@ -68,86 +72,73 @@ RSpec.describe "Example: NonprofitDonationSummaryReport" do
         virtual: true,
         value: ->(record, _) { record[:status] }
 
-      # Donation metrics
       column :total_donations,
         name: "Total Donations",
         select: { donation_count: "COUNT(DISTINCT donations.id)" },
         joins: :donations,
         value: ->(record, _) { record[:donation_count] }
 
-      column :gross_amount,
-        name: "Gross Amount",
-        select: { gross: "COALESCE(SUM(donations.amount), 0)" },
+      column :gross_amount_cents,
+        name: "Gross Amount (cents)",
+        select: { gross_cents: "COALESCE(SUM(donations.amount_cents), 0)" },
         joins: :donations,
-        value: ->(record, _) { BigDecimal(record[:gross].to_s) }
+        value: ->(record, _) { record[:gross_cents] }
 
-      # Refund metrics
-      column :total_refunds,
-        name: "Total Refunds",
-        select: { refund_count: "COUNT(DISTINCT refunds.id)" },
+      column :refund_amount_cents,
+        name: "Refund Amount (cents)",
+        select: { refunds_cents: "COALESCE(SUM(refunds.amount_cents), 0)" },
         joins: { donations: :refund },
-        value: ->(record, _) { record[:refund_count] }
+        value: ->(record, _) { record[:refunds_cents] }
 
-      column :refund_amount,
-        name: "Refund Amount",
-        select: { refunds: "COALESCE(SUM(refunds.amount), 0)" },
-        joins: { donations: :refund },
-        value: ->(record, _) { BigDecimal(record[:refunds].to_s) }
-
-      # Net amount calculation
-      column :net_amount,
-        name: "Net Amount",
+      column :net_amount_cents,
+        name: "Net Amount (cents)",
         select: {
-          donation_sum: "COALESCE(SUM(donations.amount), 0)",
-          refund_sum: "COALESCE(SUM(refunds.amount), 0)"
+          donation_sum_cents: "COALESCE(SUM(donations.amount_cents), 0)",
+          refund_sum_cents: "COALESCE(SUM(refunds.amount_cents), 0)"
         },
         joins: { donations: :refund },
         value: ->(record, _) { 
-          BigDecimal(record[:donation_sum].to_s) - BigDecimal(record[:refund_sum].to_s)
+          record[:donation_sum_cents] - record[:refund_sum_cents]
         }
     end
   end
 
-  let(:report) { report_class.new }
+  let!(:nonprofit1) { Nonprofit.create!(name: "Save the Whales") }
+  let!(:nonprofit2) { Nonprofit.create!(name: "Plant Trees") }
 
-  # ... test data setup remains the same ...
+  let!(:donation1) do
+    Donation.create!(
+      nonprofit: nonprofit1,
+      amount_cents: 10_000,
+      status: "completed",
+      processed_at: Time.utc(2025, 1, 15)
+    )
+  end
 
-  describe "column selection" do
-    it "allows selecting only basic information" do
-      results = report_class
-        .where(donation_status: { eq: "completed" })
-        .select(:nonprofit_name, :total_donations)
-        .run
+  let!(:donation2) do
+    Donation.create!(
+      nonprofit: nonprofit1,
+      amount_cents: 20_000,
+      status: "completed",
+      processed_at: Time.utc(2025, 2, 20)
+    )
+  end
 
-      expect(results.first.keys).to match_array([:nonprofit_name, :total_donations])
-    end
+  let!(:donation3) do
+    Donation.create!(
+      nonprofit: nonprofit2,
+      amount_cents: 15_000,
+      status: "completed",
+      processed_at: Time.utc(2025, 1, 1)
+    )
+  end
 
-    it "allows selecting financial metrics" do
-      results = report_class
-        .where(donation_status: { eq: "completed" })
-        .select(:nonprofit_name, :gross_amount, :refund_amount, :net_amount)
-        .run
-
-      expect(results.first.keys).to match_array([
-        :nonprofit_name,
-        :gross_amount,
-        :refund_amount,
-        :net_amount
-      ])
-    end
-
-    it "allows mixing and matching columns" do
-      results = report_class
-        .where(donation_status: { eq: "completed" })
-        .select(:nonprofit_name, :total_donations, :net_amount)
-        .run
-
-      expect(results.first.keys).to match_array([
-        :nonprofit_name,
-        :total_donations,
-        :net_amount
-      ])
-    end
+  let!(:refund1) do
+    Refund.create!(
+      donation: donation1,
+      amount_cents: 5_000,
+      status: "completed"
+    )
   end
 
   describe "filtering" do
@@ -158,10 +149,30 @@ RSpec.describe "Example: NonprofitDonationSummaryReport" do
           gte: Time.utc(2025, 1, 1),
           lt: Time.utc(2025, 2, 1)
         })
-        .select(:nonprofit_name, :gross_amount, :net_amount)
+        .select(:nonprofit_name, :gross_amount_cents, :net_amount_cents)
         .run
 
-      expect(results.first[:gross_amount]).to eq(BigDecimal("100.00"))
+      # January donation: 10,000 cents ($100.00)
+      expect(results.first[:gross_amount_cents]).to eq(10_000)
+      # Net amount after refund: 5,000 cents ($50.00)
+      expect(results.first[:net_amount_cents]).to eq(5_000)
+    end
+  end
+
+  describe "column selection" do
+    it "allows selecting only amount columns" do
+      results = report_class
+        .where(donation_status: { eq: "completed" })
+        .select(:nonprofit_name, :gross_amount_cents, :refund_amount_cents, :net_amount_cents)
+        .run
+
+      # First nonprofit's total amounts
+      whales = results.find { |r| r[:nonprofit_name] == "Save the Whales" }
+      expect(whales).to include(
+        gross_amount_cents: 30_000,   # $300.00
+        refund_amount_cents: 5_000,   # $50.00
+        net_amount_cents: 25_000      # $250.00
+      )
     end
   end
 end
