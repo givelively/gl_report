@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'bundler/setup'
+require 'active_record'
 require 'gl_report'
 
 RSpec.configure do |config|

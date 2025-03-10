@@ -20,13 +20,13 @@ module GlReport
         raise Error, "Unknown column: #{column_key}" unless column_def
 
         strategy = FilterStrategy.new(column_def)
-
-        next unless strategy.sql_filterable?
-
-        operators.each do |operator, value|
-          new_relation = strategy.apply_to_relation(new_relation, operator, value)
+        
+        if strategy.sql_filterable?
+          operators.each do |operator, value|
+            new_relation = strategy.apply_to_relation(new_relation, operator, value)
+          end
+          new_filters.delete(column_key)
         end
-        new_filters.delete(column_key)
       end
 
       # Store remaining filters for post-processing
@@ -35,10 +35,9 @@ module GlReport
       end
     end
 
-    def to_a
-      results = relation.to_a.map do |record|
-        report_class.new(scope: nil).computed_row(record)
-      end
+    def run
+      report = report_class.new
+      results = to_a.map { |record| report.computed_row(record) }
 
       return results if pending_filters.empty?
 
@@ -47,12 +46,16 @@ module GlReport
         pending_filters.all? do |column_key, operators|
           column_def = report_class._columns[column_key]
           strategy = FilterStrategy.new(column_def)
-
+          
           operators.all? do |operator, target_value|
             strategy.matches?(row[column_key], operator, target_value)
           end
         end
       end
+    end
+
+    def to_a
+      relation.to_a
     end
 
     def method_missing(method, *args, &block)
