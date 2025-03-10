@@ -71,10 +71,20 @@ module GlReport
       relation.to_a.map { |record| computed_row(record) }
     end
 
-    def computed_row(record)
-      self.class._columns.transform_values do |column_def|
+    def computed_row(record, selected_columns = nil)
+      columns = if selected_columns
+                  self.class._columns.slice(*selected_columns)
+                else
+                  self.class._columns
+                end
+
+      columns.transform_values do |column_def|
         column_def[:value].call(record, self)
       end
+    end
+
+    def self.select(*columns)
+      FilteredRelation.new(report_relation, self).select(*columns)
     end
   end
 end
