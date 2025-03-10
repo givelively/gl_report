@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module GlReport
   class BaseReport
     class << self
@@ -36,12 +38,12 @@ module GlReport
 
         # Add selects for all columns that need database data
         used_selects = {}
-        _columns.each do |_key, opts|
+        _columns.each_value do |opts|
           next unless opts[:select]
-          
+
           opts[:select].each do |alias_name, sql_fragment|
             next if used_selects[alias_name]
-            
+
             used_selects[alias_name] = true
             relation = relation.select("#{sql_fragment} AS #{alias_name}")
           end

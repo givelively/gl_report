@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module GlReport
   class FilteredRelation
     attr_reader :relation, :report_class, :pending_filters
@@ -18,13 +20,13 @@ module GlReport
         raise Error, "Unknown column: #{column_key}" unless column_def
 
         strategy = FilterStrategy.new(column_def)
-        
-        if strategy.sql_filterable?
-          operators.each do |operator, value|
-            new_relation = strategy.apply_to_relation(new_relation, operator, value)
-          end
-          new_filters.delete(column_key)
+
+        next unless strategy.sql_filterable?
+
+        operators.each do |operator, value|
+          new_relation = strategy.apply_to_relation(new_relation, operator, value)
         end
+        new_filters.delete(column_key)
       end
 
       # Store remaining filters for post-processing
@@ -45,7 +47,7 @@ module GlReport
         pending_filters.all? do |column_key, operators|
           column_def = report_class._columns[column_key]
           strategy = FilterStrategy.new(column_def)
-          
+
           operators.all? do |operator, target_value|
             strategy.matches?(row[column_key], operator, target_value)
           end

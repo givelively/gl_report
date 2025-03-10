@@ -1,78 +1,57 @@
+# frozen_string_literal: true
+
 module GlReport
-  class BaseReport
-    class << self
-      def model(klass = nil)
-        if klass
-          @model = klass
-        else
-          @model
-        end
-      end
+  class FilterStrategy
+    def initialize(column_definition)
+      @column_definition = column_definition
+    end
 
-      def column(key, options = {})
-        _columns[key] = options
-      end
+    def sql_filterable?
+      # A column is SQL-filterable if it has a select and is not marked as select_only
+      @column_definition[:select].present? && !@column_definition[:select_only]
+    end
 
-      def _columns
-        @_columns ||= {}
-      end
+    def apply_to_relation(relation, operator, value)
+      return relation unless sql_filterable?
 
-      def where(conditions)
-        FilteredRelation.new(report_relation, self).where(conditions)
-      end
+      sql_fragment = @column_definition[:select].values.first
+      sql_operator = convert_operator_to_sql(operator)
+      
+      relation.where("#{sql_fragment} #{sql_operator} ?", normalize_value(value))
+    end
 
-      def report_relation
-        raise Error, "Model is not defined for #{name}" unless _model
-
-        relation = _model.all
-
-        # Apply any joins defined in the column options
-        _columns.each_value do |opts|
-          relation = relation.left_outer_joins(opts[:joins]) if opts[:joins]
-        end
-
-        # Always select the primary id
-        relation = relation.select("#{_model.table_name}.id AS id")
-
-        # Add selects for all columns that need database data
-        used_selects = {}
-        _columns.each do |_key, opts|
-          next unless opts[:select]
-          
-          opts[:select].each do |alias_name, sql_fragment|
-            next if used_selects[alias_name]
-            
-            used_selects[alias_name] = true
-            relation = relation.select("#{sql_fragment} AS #{alias_name}")
-          end
-        end
-
-        relation
-      end
-
-      protected
-
-      def _model
-        @model
+    def matches?(record_value, operator, target_value)
+      operator = operator.to_sym
+      case operator
+      when :eq   then record_value == target_value
+      when :gt   then record_value.respond_to?(:<) && record_value > target_value
+      when :gte  then record_value.respond_to?(:<=) && record_value >= target_value
+      when :lt   then record_value.respond_to?(:<) && record_value < target_value
+      when :lte  then record_value.respond_to?(:<=) && record_value <= target_value
+      when :like then record_value.to_s.include?(target_value.to_s)
+      else
+        raise Error, "Unsupported filter operator: #{operator}"
       end
     end
 
-    attr_reader :scope
+    private
 
-    def initialize(scope: nil)
-      @scope = scope
-    end
-
-    def run
-      relation = self.class.report_relation
-      relation = relation.merge(scope) if scope
-      relation.to_a.map { |record| computed_row(record) }
-    end
-
-    def computed_row(record)
-      self.class._columns.transform_values do |column_def|
-        column_def[:value].call(record, self)
+    def convert_operator_to_sql(operator)
+      case operator.to_sym
+      when :eq   then "="
+      when :gt   then ">"
+      when :gte  then ">="
+      when :lt   then "<"
+      when :lte  then "<="
+      when :like then "LIKE"
+      else
+        raise Error, "Unsupported filter operator: #{operator}"
       end
+    end
+
+    def normalize_value(value)
+      return "%#{value}%" if @current_operator == :like
+      value
     end
   end
 end
