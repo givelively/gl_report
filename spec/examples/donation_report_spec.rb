@@ -39,6 +39,11 @@ RSpec.describe 'Example: DonationReport' do
     Object.send(:remove_const, :Donation)
   end
 
+  before do
+    Donation.destroy_all
+    Donor.destroy_all
+  end
+
   # Define our example report
   let(:report_class) do
     Class.new(GlReport::BaseReport) do
