@@ -9,21 +9,24 @@ on:
       - main
 
 jobs:
-  build:
-
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ruby-version: ['3.1', '3.2', '3.3', '3.4']
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: '3.0' # Adjust the Ruby version as needed
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: true
 
-    - name: Install dependencies
-      run: bundle install
+      - name: Run linter
+        run: bundle exec rubocop
 
-    - name: Run tests
-      run: bundle exec rspec
+      - name: Run tests
+        run: bundle exec rspec

@@ -1,18 +1,29 @@
 # frozen_string_literal: true
 
+module DonationReportExample
+  class Donor < ActiveRecord::Base
+    self.table_name = 'donors'
+    has_many :donations, class_name: 'DonationReportExample::Donation', foreign_key: 'donor_id'
+  end
+
+  class Donation < ActiveRecord::Base
+    self.table_name = 'donations'
+    belongs_to :donor, class_name: 'DonationReportExample::Donor', foreign_key: 'donor_id'
+  end
+end
+
 RSpec.describe 'Example: DonationReport' do
-  # First define a minimal test schema
   before(:all) do
     ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ':memory:')
 
     ActiveRecord::Schema.define do
-      create_table :donors do |t|
+      create_table :donors, force: true do |t|
         t.string :name
         t.string :email
         t.timestamps
       end
 
-      create_table :donations do |t|
+      create_table :donations, force: true do |t|
         t.references :donor
         t.decimal :amount, precision: 10, scale: 2
         t.string :currency, default: 'USD'
@@ -20,34 +31,22 @@ RSpec.describe 'Example: DonationReport' do
         t.timestamps
       end
     end
-
-    # Define basic AR models for testing
-    class Donor < ActiveRecord::Base
-      has_many :donations
-    end
-
-    class Donation < ActiveRecord::Base
-      belongs_to :donor
-    end
   end
 
-  # Clean up after all tests
   after(:all) do
-    ActiveRecord::Base.connection.drop_table(:donations)
-    ActiveRecord::Base.connection.drop_table(:donors)
-    Object.send(:remove_const, :Donor)
-    Object.send(:remove_const, :Donation)
+    ActiveRecord::Base.connection.drop_table(:donations) if ActiveRecord::Base.connection.table_exists?(:donations)
+    ActiveRecord::Base.connection.drop_table(:donors) if ActiveRecord::Base.connection.table_exists?(:donors)
   end
 
   before do
-    Donation.destroy_all
-    Donor.destroy_all
+    DonationReportExample::Donation.destroy_all
+    DonationReportExample::Donor.destroy_all
   end
 
   # Define our example report
   let(:report_class) do
     Class.new(GlReport::BaseReport) do
-      model Donation
+      model DonationReportExample::Donation
 
       column :donor_name,
              name: 'Donor Name',
@@ -79,19 +78,18 @@ RSpec.describe 'Example: DonationReport' do
   let(:report) { report_class.new }
 
   before do
-    # Set up test data
-    donor = Donor.create!(
+    donor = DonationReportExample::Donor.create!(
       name: 'Jane Doe',
       email: 'jane@example.com'
     )
 
-    Donation.create!(
+    DonationReportExample::Donation.create!(
       donor: donor,
       amount: 100.50,
       status: 'completed'
     )
 
-    Donation.create!(
+    DonationReportExample::Donation.create!(
       donor: donor,
       amount: 75.25,
       status: 'pending'

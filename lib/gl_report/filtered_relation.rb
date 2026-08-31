@@ -2,12 +2,15 @@
 
 module GlReport
   class FilteredRelation
-    attr_reader :relation, :report_class, :pending_filters
+    include Enumerable
 
-    def initialize(relation, report_class)
+    attr_reader :relation, :report_class, :selected_columns, :pending_filters
+
+    def initialize(relation, report_class, selected_columns: nil, pending_filters: {})
       @relation = relation
       @report_class = report_class
-      @pending_filters = {}
+      @selected_columns = selected_columns
+      @pending_filters = pending_filters.dup
     end
 
     def where(conditions)
@@ -20,36 +23,83 @@ module GlReport
         raise Error, "Unknown column: #{column_key}" unless column_def
 
         strategy = FilterStrategy.new(column_def)
+        next unless strategy.sql_filterable?
 
-        if strategy.sql_filterable?
-          operators.each do |operator, value|
-            new_relation = strategy.apply_to_relation(new_relation, operator, value)
-          end
-          new_filters.delete(column_key)
+        operators.each do |operator, value|
+          new_relation = strategy.apply_to_relation(new_relation, operator, value)
         end
+        new_filters.delete(column_key)
       end
 
       # Store remaining filters for post-processing
-      FilteredRelation.new(new_relation, report_class).tap do |fr|
-        fr.pending_filters.merge!(new_filters)
-      end
+      FilteredRelation.new(
+        new_relation,
+        report_class,
+        selected_columns: selected_columns,
+        pending_filters: pending_filters.merge(new_filters)
+      )
     end
 
     def select(*columns)
-      # Store selected columns
-      FilteredRelation.new(relation, report_class).tap do |fr|
-        fr.instance_variable_set(:@selected_columns, columns)
-        fr.pending_filters.merge!(pending_filters)
-      end
+      cols = columns.flatten
+      FilteredRelation.new(
+        relation,
+        report_class,
+        selected_columns: cols,
+        pending_filters: pending_filters
+      )
+    end
+
+    def each(&block)
+      run.each(&block)
     end
 
     def run
       report = report_class.new
-      results = to_a.map { |record| report.computed_row(record, @selected_columns) }
+      needed_columns = if selected_columns && pending_filters.present?
+                         (selected_columns + pending_filters.keys).uniq
+                       else
+                         selected_columns
+                       end
 
+      results = to_a.map { |record| report.computed_row(record, needed_columns) }
+
+      filtered = apply_pending_filters(results)
+
+      if selected_columns
+        filtered.map { |row| row.slice(*selected_columns) }
+      else
+        filtered
+      end
+    end
+
+    def to_a
+      relation.to_a
+    end
+
+    def method_missing(method, ...)
+      if relation.respond_to?(method)
+        new_relation = relation.public_send(method, ...)
+        FilteredRelation.new(
+          new_relation,
+          report_class,
+          selected_columns: selected_columns,
+          pending_filters: pending_filters
+        )
+      else
+        super
+      end
+    end
+
+    def respond_to_missing?(method, include_private = false)
+      relation.respond_to?(method) || super
+    end
+
+    private
+
+    def apply_pending_filters(results)
       return results if pending_filters.empty?
 
-      # Apply any remaining virtual filters
       results.select do |row|
         pending_filters.all? do |column_key, operators|
           column_def = report_class._columns[column_key]
@@ -60,25 +110,6 @@ module GlReport
           end
         end
       end
-    end
-
-    def to_a
-      relation.to_a
-    end
-
-    def method_missing(method, *args, &block)
-      if relation.respond_to?(method)
-        new_relation = relation.send(method, *args, &block)
-        FilteredRelation.new(new_relation, report_class).tap do |fr|
-          fr.pending_filters.merge!(pending_filters)
-        end
-      else
-        super
-      end
-    end
-
-    def respond_to_missing?(method, include_private = false)
-      relation.respond_to?(method) || super
     end
   end
 end
