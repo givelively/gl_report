@@ -1,5 +1,15 @@
 # frozen_string_literal: true
 
+require 'simplecov'
+SimpleCov.start do
+  enable_coverage :branch
+  if respond_to?(:skip)
+    skip %r{^/spec/}
+  else
+    add_filter %r{^/spec/}
+  end
+end
+
 require 'bundler/setup'
 require 'active_record'
 require 'gl_report'

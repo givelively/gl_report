@@ -1,58 +1,111 @@
 # gl_report
-A flexible reporting DSL
 
-## Example
+A flexible, SQL-optimized reporting DSL for Ruby on Rails and ActiveRecord applications with support for joins, aggregated columns, virtual formatting, and SQL/in-memory filtering.
 
-### Define the Models
-Assume we have `User` and `Order` models in our application. Each user can have multiple orders.
+## Installation
+
+Add this line to your application's Gemfile:
 
 ```ruby
-class User < ApplicationRecord
-  # Example attributes: id, name, email, created_at, updated_at
-  has_many :orders
-end
+gem 'gl_report'
 ```
 
-```ruby
-class Order < ApplicationRecord
-  # Example attributes: id, user_id, total_price, status, created_at, updated_at
-  belongs_to :user
-end
+And then execute:
+
+```bash
+bundle install
 ```
 
-### Create a Report Class
-Create a report class that inherits from `GlReport::BaseReport`.
-This class will define the structure and content of the report.
+## Features
+
+- **SQL Optimization**: Automatically builds queries with required `SELECT` aliases, `LEFT OUTER JOIN`s, and `GROUP BY` grouping.
+- **Dual-Mode Filtering**: Filters are pushed to SQL where possible; virtual or computed columns are evaluated in-memory.
+- **Column Selection**: Select only the columns you need with `.select(...)`.
+- **Enumerable Support**: Chain or iterate directly over filtered report relations (`each`, `map`, `first`, `count`).
+- **Flexible Values**: Support custom value computation procs or default attribute mapping.
+
+## Usage
+
+### 1. Define a Report Class
+
+Inherit from `GlReport::BaseReport` and declare the model, joins, and columns:
 
 ```ruby
-module Reports
-  class OrderReport < GlReport::BaseReport
-    # Define the model this report is based on
-    model Order
+class DonationReport < GlReport::BaseReport
+  model Donation
 
-    # Define columns for the report
-    column :order_id, sql_fragment: "orders.id", filterable: true, sortable: true
-    column :total_price, sql_fragment: "orders.total_price", filterable: true, sortable: true
-    column :order_status, sql_fragment: "orders.status", filterable: true
-    column :order_created_at, sql_fragment: "orders.created_at", filterable: true, sortable: true
+  column :donor_name,
+         name: 'Donor Name',
+         select: { donor_name: 'donors.name' },
+         joins: :donor,
+         value: ->(record, _) { record[:donor_name] }
 
-    # Define joins for related models
-    joins do |query|
-      query.joins(:user)
-    end
-    
-    # Define columns for the joined user model
-    column :user_name, sql_fragment: "users.name", filterable: true
-    column :user_email, sql_fragment: "users.email", filterable: true
-    column :user_created_at, sql_fragment: "users.created_at", filterable: true
+  column :amount,
+         name: 'Amount',
+         select: { amount: 'donations.amount' },
+         value: ->(record, _) { record[:amount] }
+
+  column :formatted_amount,
+         name: 'Formatted Amount',
+         select: { amount: 'donations.amount', currency: 'donations.currency' },
+         select_only: true,
+         value: ->(record, report) { report.format_currency(record[:amount], record[:currency]) }
+
+  column :status,
+         name: 'Status',
+         select: { status: 'donations.status' },
+         value: ->(record, _) { record[:status]&.titleize }
+
+  def format_currency(amount, currency)
+    "#{currency} #{format('%.2f', amount)}"
   end
 end
-
-# Using the report
-report = Reports::OrderReport.new
-report = report.where(
-  order_status: { eq: 'completed' },
-  total_price: { gt: 100.0 }
-)
-results = report.run
 ```
+
+### 2. Run and Filter Reports
+
+```ruby
+# Query from the class
+results = DonationReport
+  .where(status: { eq: 'completed' })
+  .where(amount: { gte: 50.00 })
+  .select(:donor_name, :formatted_amount)
+  .run
+
+# Or instantiate with a pre-existing scope
+scoped_report = DonationReport.new(scope: Donation.where(campaign_id: 123))
+results = scoped_report
+  .where(status: { in: ['completed', 'pending'] })
+  .run
+```
+
+### 3. Filter Operators
+
+Supported operators for both SQL and in-memory evaluation:
+
+| Operator | SQL Equivalent | In-Memory Behavior |
+| :--- | :--- | :--- |
+| `eq` | `=` or `IS NULL` | `==` |
+| `ne` / `not_eq` | `!=` or `IS NOT NULL` | `!=` |
+| `gt` | `>` | `>` |
+| `gte` | `>=` | `>=` |
+| `lt` | `<` | `<` |
+| `lte` | `<=` | `<=` |
+| `like` | `LIKE %val%` | Case-sensitive substring `include?` |
+| `ilike` | `ILIKE %val%` | Case-insensitive substring match |
+| `in` | `IN (...)` | `Array#include?` |
+| `not_in` | `NOT IN (...)` | `!Array#include?` |
+
+## Development
+
+After checking out the repo, run:
+
+```bash
+bin/setup # or bundle install
+bundle exec rspec
+bundle exec rubocop
+```
+
+## License
+
+The gem is available as open source under the terms of the [MIT License](LICENSE).

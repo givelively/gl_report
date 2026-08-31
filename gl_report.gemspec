@@ -13,11 +13,12 @@ Gem::Specification.new do |spec|
   spec.homepage    = 'https://github.com/givelively/gl_report'
   spec.license     = 'MIT'
 
-  spec.required_ruby_version = '>= 2.7.0'
+  spec.required_ruby_version = '>= 3.3.0'
 
   spec.metadata['homepage_uri'] = spec.homepage
   spec.metadata['source_code_uri'] = spec.homepage
   spec.metadata['changelog_uri'] = "#{spec.homepage}/blob/main/CHANGELOG.md"
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
   spec.files = Dir[
     'lib/**/*',
@@ -31,9 +32,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'activerecord', '>= 6.0'
   spec.add_dependency 'activesupport', '>= 6.0'
 
+  spec.add_development_dependency 'parallel', '~> 1.26'
   spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'rspec', '~> 3.0'
-  spec.add_development_dependency 'rubocop', '~> 1.21'
-  spec.add_development_dependency 'rubocop-rspec', '~> 2.0'
-  spec.add_development_dependency "sqlite3", "~> 1.4"
+  spec.add_development_dependency 'simplecov', '~> 1.1'
+  spec.add_development_dependency 'sqlite3', '>= 2.1'
 end
