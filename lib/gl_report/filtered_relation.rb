@@ -50,8 +50,8 @@ module GlReport
       )
     end
 
-    def each(&block)
-      run.each(&block)
+    def each(&)
+      run.each(&)
     end
 
     def run

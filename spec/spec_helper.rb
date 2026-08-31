@@ -3,7 +3,11 @@
 require 'simplecov'
 SimpleCov.start do
   enable_coverage :branch
-  skip '/spec/'
+  if respond_to?(:skip)
+    skip %r{^/spec/}
+  else
+    add_filter %r{^/spec/}
+  end
 end
 
 require 'bundler/setup'

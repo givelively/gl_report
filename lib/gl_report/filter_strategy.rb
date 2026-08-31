@@ -7,8 +7,7 @@ module GlReport
     OPERATOR_SQL_MAP = {
       eq: '=', ne: '!=', not_eq: '!=',
       gt: '>', gte: '>=', lt: '<', lte: '<=',
-      like: 'LIKE', ilike: 'ILIKE',
-      in: 'IN', not_in: 'NOT IN'
+      like: 'LIKE', ilike: 'LIKE', in: 'IN', not_in: 'NOT IN'
     }.freeze
 
     ORDERED_COMPARATORS = { gt: :>, gte: :>=, lt: :<, lte: :<= }.freeze
@@ -25,12 +24,17 @@ module GlReport
       return relation unless sql_filterable?
 
       sql_fragment = @column_definition[:select].values.first
-      sql_operator = convert_operator_to_sql(operator, value)
-      normalized_val = normalize_value(value, operator)
+      op = operator.to_sym
 
-      if value.nil? && %i[eq not_eq ne].include?(operator.to_sym)
-        relation.where("#{sql_fragment} #{sql_operator}")
-      elsif %i[in not_in].include?(operator.to_sym)
+      return handle_nil_sql_filter(relation, sql_fragment, op) if value.nil?
+
+      sql_operator = convert_operator_to_sql(op, value)
+      normalized_val = normalize_value(value, op)
+
+      case op
+      when :ilike
+        relation.where("LOWER(#{sql_fragment}) LIKE ?", normalized_val.downcase)
+      when :in, :not_in
         relation.where("#{sql_fragment} #{sql_operator} (?)", normalized_val)
       else
         relation.where("#{sql_fragment} #{sql_operator} ?", normalized_val)
@@ -53,6 +57,17 @@ module GlReport
     end
 
     private
+
+    def handle_nil_sql_filter(relation, sql_fragment, operator)
+      if %i[eq not_eq ne].include?(operator)
+        sql_operator = convert_operator_to_sql(operator, nil)
+        relation.where("#{sql_fragment} #{sql_operator}")
+      elsif %i[like ilike in not_in].include?(operator)
+        relation.where('1 = 0')
+      else
+        relation
+      end
+    end
 
     def string_matches?(record_val, target_val, case_sensitive:)
       return false if record_val.nil? || target_val.nil?
@@ -82,6 +97,7 @@ module GlReport
     end
 
     def normalize_value(value, operator)
+      return nil if value.nil?
       return "%#{value}%" if %i[like ilike].include?(operator.to_sym)
       return Array(value) if %i[in not_in].include?(operator.to_sym)
 

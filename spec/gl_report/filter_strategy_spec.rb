@@ -42,7 +42,9 @@ RSpec.describe GlReport::FilterStrategy do
         { value: 100, target: 100, expected: true },
         { value: 100, target: 200, expected: false },
         { value: nil, target: nil, expected: true },
-        { value: 100, target: nil, expected: false }
+        { value: 100, target: nil, expected: false },
+        { value: false, target: false, expected: true },
+        { value: false, target: true, expected: false }
       ],
       ne: [
         { value: 100, target: 200, expected: true },
@@ -125,10 +127,10 @@ RSpec.describe GlReport::FilterStrategy do
       expect(relation).to have_received(:where).with('orders.amount LIKE ?', '%term%')
     end
 
-    it 'formats ILIKE query with wildcards' do
+    it 'formats ILIKE query with LOWER for database agnosticism' do
       allow(relation).to receive(:where).and_return(relation)
-      strategy.apply_to_relation(relation, :ilike, 'term')
-      expect(relation).to have_received(:where).with('orders.amount ILIKE ?', '%term%')
+      strategy.apply_to_relation(relation, :ilike, 'Term')
+      expect(relation).to have_received(:where).with('LOWER(orders.amount) LIKE ?', '%term%')
     end
 
     it 'handles IS NULL for nil equality' do
@@ -141,6 +143,12 @@ RSpec.describe GlReport::FilterStrategy do
       allow(relation).to receive(:where).and_return(relation)
       strategy.apply_to_relation(relation, :not_eq, nil)
       expect(relation).to have_received(:where).with('orders.amount IS NOT NULL')
+    end
+
+    it 'handles nil for LIKE queries by returning 1 = 0' do
+      allow(relation).to receive(:where).and_return(relation)
+      strategy.apply_to_relation(relation, :like, nil)
+      expect(relation).to have_received(:where).with('1 = 0')
     end
 
     it 'handles IN queries' do

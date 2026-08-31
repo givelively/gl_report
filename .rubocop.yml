@@ -1,7 +1,10 @@
 AllCops:
   NewCops: enable
   SuggestExtensions: false
-  TargetRubyVersion: 3.0
+  TargetRubyVersion: 3.1
+
+Metrics/ClassLength:
+  Max: 150
 
 Layout/LineLength:
   Max: 120

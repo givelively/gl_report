@@ -98,14 +98,26 @@ RSpec.describe GlReport::BaseReport do
       expect(filtered.selected_columns).to eq([:simple_column])
     end
 
-    it 'assigns default value proc when omitted' do
+    it 'assigns default value proc when omitted and preserves falsey values' do
       expect(columns[:default_value_col][:value]).to be_a(Proc)
+
+      # string/symbol hash access
       record_hash = { default_value_col: 'hello' }
       expect(columns[:default_value_col][:value].call(record_hash, nil)).to eq('hello')
 
+      # falsey boolean preservation
+      falsey_hash = { default_value_col: false }
+      expect(columns[:default_value_col][:value].call(falsey_hash, nil)).to be false
+
+      # falsey numeric preservation
+      zero_hash = { default_value_col: 0 }
+      expect(columns[:default_value_col][:value].call(zero_hash, nil)).to eq(0)
+
+      # Struct access
       record_obj = Struct.new(:default_value_col).new('world')
       expect(columns[:default_value_col][:value].call(record_obj, nil)).to eq('world')
 
+      # Custom PORO access
       custom_obj = Class.new do
         def default_value_col
           'poro'
@@ -128,12 +140,41 @@ RSpec.describe GlReport::BaseReport do
   describe '.report_relation' do
     subject(:relation) { report_class.report_relation }
 
-    it 'includes necessary selects' do
+    it 'includes necessary selects without adding GROUP BY for non-aggregate reports' do
       allow(test_model).to receive(:select).and_call_original
+      allow(test_model).to receive(:group).and_call_original
       relation
 
       expect(test_model).to have_received(:select).with('test_models.id AS id')
       expect(test_model).to have_received(:select).with('test_models.amount AS amount')
+      expect(test_model).not_to have_received(:group)
+    end
+
+    it 'adds GROUP BY when aggregate functions are detected' do
+      mdl = test_model
+      agg_report = Class.new(described_class) do
+        model mdl
+        column :total, select: { total: 'SUM(test_models.amount)' }
+      end
+
+      allow(test_model).to receive(:group).and_call_original
+      agg_report.report_relation
+
+      expect(test_model).to have_received(:group).with('test_models.id')
+    end
+
+    it 'supports custom group_by' do
+      mdl = test_model
+      custom_group_report = Class.new(described_class) do
+        model mdl
+        group_by 'test_models.status', 'test_models.category'
+        column :total, select: { total: 'SUM(test_models.amount)' }
+      end
+
+      allow(test_model).to receive(:group).and_call_original
+      custom_group_report.report_relation
+
+      expect(test_model).to have_received(:group).with('test_models.status', 'test_models.category')
     end
 
     context 'when model is not defined' do
