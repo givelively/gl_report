@@ -62,10 +62,10 @@ module GlReport
       if %i[eq not_eq ne].include?(operator)
         sql_operator = convert_operator_to_sql(operator, nil)
         relation.where("#{sql_fragment} #{sql_operator}")
-      elsif %i[like ilike in not_in].include?(operator)
+      elsif %i[like ilike in not_in gt gte lt lte].include?(operator)
         relation.where('1 = 0')
       else
-        relation
+        raise Error, "Unsupported filter operator: #{operator}"
       end
     end
 

@@ -151,6 +151,12 @@ RSpec.describe GlReport::FilterStrategy do
       expect(relation).to have_received(:where).with('1 = 0')
     end
 
+    it 'handles nil for ordered queries (gt, gte, lt, lte) by returning 1 = 0' do
+      allow(relation).to receive(:where).and_return(relation)
+      strategy.apply_to_relation(relation, :gt, nil)
+      expect(relation).to have_received(:where).with('1 = 0')
+    end
+
     it 'handles IN queries' do
       allow(relation).to receive(:where).and_return(relation)
       strategy.apply_to_relation(relation, :in, [10, 20])
