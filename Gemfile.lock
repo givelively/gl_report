@@ -112,8 +112,8 @@ DEPENDENCIES
   rspec (~> 3.0)
   rubocop (~> 1.90)
   rubocop-rspec (~> 3.10)
-  simplecov (~> 1.1)
+  simplecov (~> 1.1, >= 0.22)
   sqlite3 (>= 2.1)
 
 BUNDLED WITH
-   2.3.7
+  4.0.19
