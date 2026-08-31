@@ -32,8 +32,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'activerecord', '>= 6.0'
   spec.add_dependency 'activesupport', '>= 6.0'
 
+  spec.add_development_dependency 'parallel', '~> 1.26'
   spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'rspec', '~> 3.0'
-  spec.add_development_dependency 'simplecov', '>= 0.22'
+  spec.add_development_dependency 'simplecov', '~> 1.1'
   spec.add_development_dependency 'sqlite3', '>= 2.1'
 end
