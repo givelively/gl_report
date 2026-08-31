@@ -16,6 +16,18 @@ RSpec.describe GlReport::FilteredRelation do
           self
         end
 
+        def count(*)
+          2
+        end
+
+        def size
+          2
+        end
+
+        def empty?
+          false
+        end
+
         def to_a
           [
             { id: 1, amount: 100, status: 'active' },
@@ -124,11 +136,37 @@ RSpec.describe GlReport::FilteredRelation do
     end
   end
 
+  describe 'counting and sizing' do
+    it 'delegates count directly to relation when no pending virtual filters' do
+      allow(relation).to receive(:count).and_return(5)
+      expect(filtered_relation.count).to eq(5)
+      expect(relation).to have_received(:count)
+    end
+
+    it 'evaluates count over filtered results when virtual filters exist' do
+      chained = filtered_relation.where(formatted_amount: { eq: '$100' })
+      expect(chained.count).to eq(1)
+    end
+
+    it 'evaluates count with a block' do
+      expect(filtered_relation.count { |r| r[:amount] > 150 }).to eq(1)
+    end
+
+    it 'supports size, length, and empty?' do
+      expect(filtered_relation.size).to eq(2)
+      expect(filtered_relation.length).to eq(2)
+      expect(filtered_relation.empty?).to be false
+
+      chained = filtered_relation.where(formatted_amount: { eq: '$999' })
+      expect(chained.size).to eq(0)
+      expect(chained.empty?).to be true
+    end
+  end
+
   describe 'Enumerable' do
-    it 'supports map, each, count directly' do
+    it 'supports map, each directly' do
       amounts = filtered_relation.map { |r| r[:amount] }
       expect(amounts).to eq([100, 200])
-      expect(filtered_relation.count).to eq(2)
     end
   end
 

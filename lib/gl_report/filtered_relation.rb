@@ -19,7 +19,6 @@ module GlReport
       new_filters = conditions.dup
       new_relation = relation
 
-      # Apply SQL filters where possible
       conditions.each do |column_key, operators|
         column_def = report_class._columns[column_key]
         raise Error, "Unknown column: #{column_key}" unless column_def
@@ -33,7 +32,6 @@ module GlReport
         new_filters.delete(column_key)
       end
 
-      # Store remaining filters for post-processing
       FilteredRelation.new(
         new_relation,
         report_class,
@@ -54,6 +52,36 @@ module GlReport
 
     def each(&)
       run.each(&)
+    end
+
+    def count(*, &)
+      if block_given?
+        run.count(&)
+      elsif pending_filters.empty? && relation.respond_to?(:count)
+        relation.count(*)
+      else
+        run.size
+      end
+    end
+
+    def size
+      if pending_filters.empty? && relation.respond_to?(:size)
+        relation.size
+      else
+        run.size
+      end
+    end
+
+    def length
+      run.length
+    end
+
+    def empty?
+      if pending_filters.empty? && relation.respond_to?(:empty?)
+        relation.empty?
+      else
+        run.empty?
+      end
     end
 
     def run
