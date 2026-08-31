@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'active_support/core_ext/hash/deep_merge'
+
 module GlReport
   class FilteredRelation
     include Enumerable
@@ -36,7 +38,7 @@ module GlReport
         new_relation,
         report_class,
         selected_columns: selected_columns,
-        pending_filters: pending_filters.merge(new_filters)
+        pending_filters: pending_filters.deep_merge(new_filters)
       )
     end
 

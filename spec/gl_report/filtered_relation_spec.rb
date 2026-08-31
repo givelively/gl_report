@@ -79,6 +79,30 @@ RSpec.describe GlReport::FilteredRelation do
       chained = filtered_relation.select(:amount).where(status: { eq: 'active' })
       expect(chained.selected_columns).to eq([:amount])
     end
+
+    it 'deep merges pending filters when multiple where calls are chained on the same virtual column' do
+      chained = filtered_relation
+                .where(formatted_amount: { not_eq: '$100' })
+                .where(formatted_amount: { not_eq: '$300' })
+
+      expect(chained.pending_filters[:formatted_amount]).to eq(
+        not_eq: '$300'
+      )
+    end
+
+    it 'combines multiple distinct operators on the same virtual column' do
+      chained = filtered_relation
+                .where(formatted_amount: { gt: '$050' })
+                .where(formatted_amount: { lt: '$150' })
+
+      expect(chained.pending_filters[:formatted_amount]).to eq(
+        gt: '$050',
+        lt: '$150'
+      )
+      expect(chained.run).to eq(
+        [{ amount: 100, status: 'active', formatted_amount: '$100' }]
+      )
+    end
   end
 
   describe '#select' do
